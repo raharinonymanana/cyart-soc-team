@@ -1,113 +1,95 @@
-# Task 7 — Security Metrics and Executive Reporting
+# 07 — Security Metrics and Executive Reporting
 
-## Overview
+## Objective
+Calculate advanced SOC metrics (MTTD, MTTR, dwell time, false positive rate) from real incident data and create an executive report presenting findings and recommendations.
 
-**Objective:** Calculate advanced SOC performance metrics and produce an executive-level report communicating SOC effectiveness.  
-**Tools Used:** Elastic Security, Google Sheets, Google Docs  
-**Date:** 2025-04-03  
-**Analyst:** SOC Intern — CyArt Tech India  
+## Tools Used
+- **Wazuh Dashboard** — SIEM metrics and alert analysis
+- **Manual Calculation** — Derived from attack/detection timeline
 
----
+## Incident Timeline (Source Data)
 
-## 1. SOC Metrics — Definitions
+| Event                              | Timestamp               | Notes                          |
+|------------------------------------|-------------------------|--------------------------------|
+| Attack initiated (Nmap scan)       | 2026-04-05 15:33 IST    | First reconnaissance activity  |
+| SMB brute force started            | 2026-04-05 15:38 IST    | T1110 — Brute Force            |
+| SSH brute force started            | 2026-04-05 15:45 IST    | T1110.001 — Password Guessing  |
+| Payload delivered (update.exe)     | 2026-04-05 16:04 IST    | T1105 — Ingress Tool Transfer  |
+| Payload blocked by McAfee          | 2026-04-05 16:08 IST    | AV detection triggered         |
+| Wazuh alerts reviewed              | 2026-04-05 16:22 IST    | 1,074 auth_failed events found |
+| Caldera emulation executed         | 2026-04-05 17:12 IST    | T1033, T1082, T1016 executed   |
+| Containment (iptables block)       | 2026-04-05 17:30 IST    | Attacker IP blocked            |
+| Incident closed                    | 2026-04-05 17:45 IST    | Cleanup completed              |
 
-| Metric                  | Definition                                                                 |
-|-------------------------|----------------------------------------------------------------------------|
-| MTTD (Mean Time to Detect) | Average time from attacker initial access to SOC detection              |
-| MTTR (Mean Time to Respond) | Average time from detection to containment/resolution                  |
-| Dwell Time              | Total time attacker remains undetected in the environment                  |
-| False Positive Rate     | Percentage of alerts that are non-malicious out of total alerts generated  |
-| Incident Resolution Rate | Percentage of incidents fully resolved within SLA window                  |
+## Metrics Calculation
 
----
+### Mean Time to Detect (MTTD)
+**Formula:** MTTD = Time of Detection − Time of Attack Start
 
-## 2. Metrics Dashboard — Mock Incident Data
+- Attack Start: 15:33 IST
+- First Detection (McAfee AV alert): 16:08 IST
+- MTTD for AV: **35 minutes**
+- First SIEM Detection (Wazuh alert review): 16:22 IST
+- MTTD for SIEM: **49 minutes**
 
-### Incident Reference: INC-2025-0403
+**Average MTTD: 42 minutes**
 
-| Metric                  | Value         | Notes                                              |
-|-------------------------|---------------|----------------------------------------------------|
-| Attack Start Time       | 07:00:00      | Estimated from firewall log first anomaly           |
-| First Alert Generated   | 09:00:00      | Wazuh Rule 92200 triggered                         |
-| MTTD                    | **2 hours**   | 09:00 - 07:00                                      |
-| Containment Completed   | 13:00:00      | IP blocked via CrowdSec, VM isolated               |
-| MTTR                    | **4 hours**   | 13:00 - 09:00                                      |
-| Dwell Time              | **6 hours**   | 13:00 - 07:00 (full attacker presence window)      |
-| Total Alerts (Week)     | 87            | All sources combined                               |
-| False Positives         | 7             | Verified benign after investigation                |
-| False Positive Rate     | **8.04%**     | (7 / 87) × 100                                    |
-| Incidents Resolved      | 5 of 5        | All within 24-hour SLA window                     |
-| Incident Resolution Rate | **100%**     | Full week                                          |
+### Mean Time to Respond (MTTR)
+**Formula:** MTTR = Time of Containment − Time of Detection
 
----
-
-## 3. Metrics Calculation Detail
-
-### MTTD
-```
-Attack Start:     07:00:00
-First Detection:  09:00:00
-MTTD = 09:00 - 07:00 = 2 hours
-```
-
-### MTTR
-```
-Detection Time:      09:00:00
-Containment Time:    13:00:00
-MTTR = 13:00 - 09:00 = 4 hours
-```
+- Detection: 16:08 IST
+- Containment (IP blocked): 17:30 IST
+- **MTTR: 1 hour 22 minutes (82 minutes)**
 
 ### Dwell Time
-```
-Attack Start:        07:00:00
-Full Containment:    13:00:00
-Dwell Time = 13:00 - 07:00 = 6 hours
-```
+**Formula:** Dwell Time = Time of Containment − Time of Initial Compromise
+
+- Initial compromise (first attack activity): 15:33 IST
+- Containment: 17:30 IST
+- **Dwell Time: 1 hour 57 minutes (117 minutes)**
 
 ### False Positive Rate
-```
-Total Alerts:        87
-False Positives:     7
-FPR = (7 / 87) × 100 = 8.04%
-```
+**Formula:** FP Rate = False Positives / Total Alerts × 100
 
----
+- Total alerts generated: 8,049 (22 medium + 8,027 low severity)
+- Estimated false positives (routine system events): ~7,000
+- True positive alerts (attack-related): ~1,049
+- **False Positive Rate: ~87%**
 
-## 4. Dwell Time Analysis (50 Words)
+Note: High FP rate is expected in a lab environment with default Wazuh rules. In production, tuning rules and whitelisting known-good activity would reduce this significantly.
 
-For incident INC-2025-0403, the attacker maintained undetected presence for 6 hours between initial access (07:00) and full containment (13:00). The 2-hour detection delay indicates a gap in real-time endpoint monitoring. Reducing dwell time requires tuning Wazuh rules for earlier behavioural anomaly detection and enabling continuous network traffic analysis.
+### Metrics Summary Table
 
----
+| Metric               | Value         | Industry Benchmark | Assessment  |
+|----------------------|---------------|--------------------|-------------|
+| MTTD                 | 42 minutes    | 24-48 hours        | Excellent   |
+| MTTR                 | 82 minutes    | 4-8 hours          | Good        |
+| Dwell Time           | 117 minutes   | 21 days (median)   | Excellent   |
+| False Positive Rate  | 87%           | < 50%              | Needs Work  |
+| Total Alerts         | 8,049         | —                  | —           |
+| MITRE-Mapped Alerts  | 2,053         | —                  | —           |
 
-## 5. Elastic Security Dashboard — Configuration Notes
+## Executive Report (150 words)
 
-**Dashboard Name:** `SOC-Performance-Week4`  
-**Index Pattern:** `wazuh-alerts-*`
+### SOC Performance Summary — Adversary Emulation Exercise
 
-| Panel | Visualization Type | Query / Field |
-|-------|--------------------|---------------|
-| MTTD Over Time | Line Chart | `rule.level >= 10` grouped by hour |
-| MTTR Per Incident | Bar Chart | `incident.resolution_time` |
-| False Positive Rate | Gauge | `alert.verdict: false_positive` |
-| Dwell Time | Metric | Custom calculated field |
-| Alert Volume | Area Chart | `@timestamp` per day |
+On April 5, 2026, the SOC conducted a controlled adversary emulation exercise targeting the Windows 11 endpoint using Metasploit and MITRE Caldera. The exercise simulated brute force attacks (T1110), malware delivery (T1105), and automated TTP execution across the discovery kill chain phase.
 
----
+**Key Findings:** Detection capabilities performed well with an MTTD of 42 minutes and MTTR of 82 minutes — both significantly below industry benchmarks. Wazuh generated 2,053 MITRE-mapped alerts, and McAfee AV successfully blocked the malicious payload.
 
-## 6. Executive Summary (150 Words)
+**Areas for Improvement:** The false positive rate of 87% indicates a need for rule tuning and baseline establishment. Additionally, C2 agent deployment was not detected by the SIEM.
 
-**To:** CyArt Tech India — Security Leadership  
-**From:** SOC Analyst Team  
-**Re:** SOC Performance Report — Week of April 3, 2025  
+**Recommendations:**
+1. Implement Sysmon integration for enhanced process monitoring
+2. Tune Wazuh rules to reduce false positives by 50%
+3. Add custom detection rules for PowerShell download cradles
+4. Establish regular emulation exercises quarterly
 
-During the reporting period, the SOC successfully detected and contained one security incident (INC-2025-0403) involving simulated spearphishing activity mapped to MITRE ATT&CK T1566. Key performance metrics recorded a Mean Time to Detect (MTTD) of 2 hours and a Mean Time to Respond (MTTR) of 4 hours, with an overall attacker dwell time of 6 hours. The false positive rate stood at 8.04%, within acceptable operational thresholds. All five open incidents were resolved within the 24-hour SLA window, achieving a 100% incident resolution rate for the week.
+## Dwell Time Analysis (50 words)
 
-**Recommendations:** Implement additional Wazuh detection rules targeting user execution behaviours (T1204) to reduce MTTD below 1 hour. Integrate email gateway telemetry to close identified coverage gaps and further reduce dwell time in future incidents.
+Dwell time for the simulated incident was 117 minutes — from initial reconnaissance at 15:33 IST to containment at 17:30 IST. This is significantly below the industry median of 21 days, demonstrating effective monitoring. However, automated containment (SOAR playbook integration) could reduce dwell time further to under 30 minutes.
 
----
-
-## 7. References
-
-- NIST SP 800-61 Rev 2: https://csrc.nist.gov/publications/detail/sp/800-61/rev-2/final
-- CISA Cybersecurity Metrics: https://www.cisa.gov/
-- Elastic Security Dashboards: https://www.elastic.co/guide/en/security/current/dashboards-overview.html
+## Screenshots
+- Wazuh dashboard showing alert severity distribution (22 medium, 8,027 low)
+- Wazuh Threat Hunting view with 2,053 MITRE-mapped events
+- Metrics calculation summary
